@@ -6,44 +6,49 @@ class FormHandler
     private $scrapper;
     private $formData;
     private $errors;
+    private $requiredFields;
 
-    // Yapıcı metod; Scrapper nesnesini alır
+    // Yapıcı metod; Scrapper nesnesini alır ve başlangıç ayarlarını yapar
     public function __construct($scrapper)
     {
         $this->scrapper = $scrapper; // Scrapper nesnesini sakla
         $this->formData = []; // Form verilerini başlat
         $this->errors = []; // Hata mesajlarını başlat
+        $this->requiredFields = []; // Gerekli alanları başlat
     }
 
     // Form verisi ekleme metod
-    public function addField($name, $value)
+    public function addField($name, $value, $isRequired = false)
     {
         // Veriyi temizle ve sakla
         $this->formData[$name] = htmlspecialchars(trim($value)); // Güvenlik için veri temizleme
+        if ($isRequired) {
+            $this->requiredFields[] = $name;
+        }
     }
 
     // Form verilerini doğrulama metod
     public function validate()
     {
-        // Burada form verilerini doğrulamak için özel kurallar ekleyebilirsiniz
         foreach ($this->formData as $name => $value) {
             // Boş alan kontrolü
-            if (empty($value)) {
+            if (in_array($name, $this->requiredFields) && empty($value)) {
                 $this->errors[$name] = "{$name} alanı boş bırakılamaz."; // Hata mesajı ekle
-                continue; // Hata bulduğumuzda devam et
+                continue;
             }
-            // Geçerli e-posta kontrolü
+
+            // E-posta kontrolü (e-posta alanı varsa)
             if ($name === 'email' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
                 $this->errors[$name] = "Geçersiz e-posta adresi."; // Hata mesajı ekle
             }
-            // Diğer doğrulama kuralları ekleyin
-            // Örneğin, şifre için en az 8 karakter ve büyük harf kontrolü
+
+            // Şifre için kontrol (örnek)
             if ($name === 'password' && strlen($value) < 8) {
                 $this->errors[$name] = "Şifre en az 8 karakter olmalıdır."; // Hata mesajı ekle
             }
         }
-        // Hatalar varsa false, yoksa true döndür
-        return empty($this->errors);
+        
+        return empty($this->errors); // Hatalar varsa false, yoksa true döndür
     }
 
     // Hataları döndüren metod
@@ -52,33 +57,32 @@ class FormHandler
         return $this->errors; // Hata mesajlarını geri döndür
     }
 
-    // Form verisini POST isteği olarak gönderme metod
+    // Başarı durumunda özel mesaj ekleyerek döndüren metod
     public function submit()
     {
-        // Öncelikle verileri doğrula
         if (!$this->validate()) {
             return [
                 'success' => false,
-                'errors' => $this->getErrors() // Hata varsa döndür
+                'errors' => $this->getErrors()
             ];
         }
 
         // Proxy ve user-agent rotasyonu
-        $this->scrapper->setRandomUserAgent(); // Rastgele kullanıcı ajanı ayarla
-        $this->scrapper->setRandomReferer(); // Rastgele referans ayarla
+        $this->scrapper->setRandomUserAgent();
+        $this->scrapper->setRandomReferer();
         
         try {
-           
             $response = $this->scrapper->post($this->formData);
+
             return [
                 'success' => true,
-                'response' => $response 
+                'message' => 'Form başarıyla gönderildi.',
+                'response' => $response
             ];
         } catch (Exception $e) {
-          
             return [
                 'success' => false,
-                'errors' => ['global' => 'Form gönderimi sırasında bir hata oluştu: ' . $e->getMessage()] 
+                'errors' => ['global' => 'Form gönderimi sırasında bir hata oluştu: ' . $e->getMessage()]
             ];
         }
     }
